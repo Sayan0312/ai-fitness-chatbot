@@ -3,11 +3,25 @@ from groq import Groq
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
+# Safe API key loading
+api_key = None
+
+# Try Streamlit secrets (only if exists)
+try:
+    api_key = st.secrets["GROQ_API_KEY"]
+except:
+    api_key = os.getenv("GROQ_API_KEY")
+
+if not api_key:
+    st.error("GROQ_API_KEY not found. Add it to .env (local) or Streamlit secrets (cloud).")
+    st.stop()
+
+client = Groq(api_key=api_key)
+
 # Setup Groq client
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+client = Groq(api_key=api_key)
 
 st.set_page_config(page_title="Fitness AI Coach 💪", page_icon="🏋️")
 
@@ -34,8 +48,10 @@ if prompt := st.chat_input("Ask your fitness question..."):
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system", "content": 
-                 "You are a certified fitness coach. Give structured, practical, and safe fitness advice."}
+                {
+                    "role": "system",
+                    "content": "You are a certified fitness coach. Give structured, practical, and safe fitness advice."
+                }
             ] + st.session_state.messages
         )
         
