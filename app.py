@@ -5,7 +5,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Load API key
+# -------------------------------
+# LOAD API KEY
+# -------------------------------
 api_key = None
 try:
     api_key = st.secrets["GROQ_API_KEY"]
@@ -23,9 +25,17 @@ st.set_page_config(page_title="Fitness AI Coach 💪", page_icon="🏋️")
 st.title("🏋️ AI Fitness Coach")
 
 # -------------------------------
+# SESSION STATE SETUP
+# -------------------------------
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+if "plan_generated" not in st.session_state:
+    st.session_state.plan_generated = False
+
+# -------------------------------
 # PROFILE INPUT SECTION
 # -------------------------------
-
 st.header("Enter Your Details")
 
 age = st.number_input("Age", 10, 100, 25)
@@ -42,17 +52,9 @@ goal = st.selectbox(
     ["Weight Loss", "Muscle Gain", "Maintain Fitness"]
 )
 
-# Store advice in session state
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-if "initial_advice" not in st.session_state:
-    st.session_state.initial_advice = None
-
 # -------------------------------
-# GET FITNESS ADVICE BUTTON
+# GENERATE FITNESS PLAN BUTTON
 # -------------------------------
-
 if st.button("💪 Get Fitness Advice"):
 
     profile_prompt = f"""
@@ -68,74 +70,75 @@ if st.button("💪 Get Fitness Advice"):
     Goal: {goal}
 
     Include:
-    - Workout plan
+    - Weekly workout structure
     - Diet suggestions
-    - Sleep advice
-    - Weekly structure
-    - Safety tips
+    - Sleep optimization
+    - Safety precautions
+    - Practical tips
     """
 
-    response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a certified professional fitness coach."
-            },
-            {
-                "role": "user",
-                "content": profile_prompt
-            }
-        ]
+    with st.spinner("Generating your personalized fitness plan..."):
+
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a certified professional fitness coach."
+                },
+                {
+                    "role": "user",
+                    "content": profile_prompt
+                }
+            ]
+        )
+
+        advice = response.choices[0].message.content
+
+    # Reset chat and store plan
+    st.session_state.messages = []
+    st.session_state.messages.append(
+        {"role": "assistant", "content": advice}
     )
 
-    advice = response.choices[0].message.content
-
-    st.session_state.initial_advice = advice
-    st.session_state.messages = [
-        {"role": "assistant", "content": advice}
-    ]
+    st.session_state.plan_generated = True
 
 # -------------------------------
-# DISPLAY INITIAL ADVICE
+# DISPLAY CHAT HISTORY
 # -------------------------------
-
-if st.session_state.initial_advice:
-    st.markdown("## 📝 Your Personalized Plan")
-    st.markdown(st.session_state.initial_advice)
-
-# -------------------------------
-# CHAT SECTION (After Advice)
-# -------------------------------
-
-st.markdown("---")
-st.header("💬 Follow-up Questions")
-
-# Show chat history
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if user_chat := st.chat_input("Ask follow-up or request summary..."):
+# -------------------------------
+# FOLLOW-UP CHAT (ONLY AFTER PLAN)
+# -------------------------------
+if st.session_state.plan_generated:
 
-    st.session_state.messages.append({"role": "user", "content": user_chat})
+    if user_chat := st.chat_input("Ask follow-up question or request summary..."):
 
-    with st.chat_message("user"):
-        st.markdown(user_chat)
+        st.session_state.messages.append(
+            {"role": "user", "content": user_chat}
+        )
 
-    response = client.chat.completions.create(
-        model="llama-3.1-8b-instant",
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a certified fitness coach. Continue the conversation based on previous advice."
-            }
-        ] + st.session_state.messages
-    )
+        with st.chat_message("user"):
+            st.markdown(user_chat)
 
-    reply = response.choices[0].message.content
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a certified fitness coach. Continue helping based on the existing plan."
+                }
+            ] + st.session_state.messages
+        )
 
-    with st.chat_message("assistant"):
-        st.markdown(reply)
+        reply = response.choices[0].message.content
 
-    st.session_state.messages.append({"role": "assistant", "content": reply})
+        with st.chat_message("assistant"):
+            st.markdown(reply)
+
+        st.session_state.messages.append(
+            {"role": "assistant", "content": reply}
+        )
